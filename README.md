@@ -177,15 +177,27 @@ human; it lands in the band built for exactly this kind of uncertainty.
 
 | Label | Score range | The exact text a reader sees |
 |---|---|---|
-| high-confidence human |  |  |
-| unsure |  |  |
-| high-confidence AI |  |  |
+| high-confidence human | 0.00 – 0.40 | "We think this was most likely written by a person." |
+| unsure | 0.40 – 0.65 | "We can't confidently tell whether this was written by a person or an AI system — our checks didn't clearly point either way. This isn't a judgment against you, and no action is needed on your part." |
+| high-confidence AI | 0.65 – 1.00 | "We think this was most likely written by an AI system, not a person. If you wrote this yourself, you can appeal this decision and tell us why below." |
 
 **Why I worded the "unsure" one this way:**
-<!-- It's the hardest of the three. It has to admit uncertainty without
-     sounding like an accusation, because the person reading it may well have
-     written every word themselves. -->
+It needed to admit uncertainty without reading as half an accusation, because
+the person seeing it may well have written every word themselves. I avoided
+"this might be AI-generated" (still names AI first, still sounds like
+suspicion) in favor of naming the uncertainty itself as the result — "our
+checks didn't clearly point either way" puts the limitation on the system,
+not on the writer. The closing line ("no action is needed on your part")
+exists specifically so a writer landing here doesn't feel compelled to defend
+themselves against a label that was built to not be an accusation.
 
+**Why `HUMAN_THRESHOLD` moved from 0.35 to 0.40:** During calibration, a
+genuinely literary human sample scored 0.363 — just above the original 0.35
+cutoff — and landed in "unsure" instead of "human." Raising the human
+threshold to 0.40 only moves the human/unsure boundary; it doesn't touch
+`AI_THRESHOLD` (0.65) at all, so it has no effect on false-positive risk. It
+only makes the human label easier to reach, which is the direction that
+costs nothing.
 
 
 ---
@@ -197,19 +209,21 @@ human; it lands in the band built for exactly this kind of uncertainty.
 
 **A submission**
 
-<!-- The response needs content_id, guess, confidence, label, AND both
-     signal scores - model_score and style_score. Unit 8's tools read those
-     two off the response, so leaving them out costs you next unit's
-     diagnostics. -->
-
 ```bash
 $ curl -X POST http://127.0.0.1:5000/submit \
   -H "Content-Type: application/json" \
-  -d '{"text": "...", "creator_id": "..."}'
+  -d '{"text": "The implementation of the proposed framework requires careful consideration of several key factors. First, it is important to note that the system must be able to handle a wide variety of different inputs. Additionally, the overall performance of the solution depends on a number of important variables. It is also worth noting that proper testing is essential for ensuring reliability. Furthermore, the design should prioritize both scalability and maintainability. Finally, user feedback should be incorporated throughout the development process.", "creator_id": "test_ai"}'
 ```
 
 ```json
-
+{
+  "confidence": 0.741,
+  "content_id": "7e97519c-ace4-4ea4-b30a-9b590fd99630",
+  "guess": "ai",
+  "label": "We think this was most likely written by an AI system, not a person. If you wrote this yourself, you can appeal this decision and tell us why below.",
+  "model_score": 0.8577,
+  "style_score": 0.6244
+}
 ```
 
 **An appeal**
@@ -217,11 +231,15 @@ $ curl -X POST http://127.0.0.1:5000/submit \
 ```bash
 $ curl -X POST http://127.0.0.1:5000/appeal \
   -H "Content-Type: application/json" \
-  -d '{"content_id": "...", "reasoning": "..."}'
+  -d '{"content_id": "7e97519c-ace4-4ea4-b30a-9b590fd99630", "reasoning": "I wrote this myself as a formal essay for class. English is my second language, so I write carefully and plainly on purpose."}'
 ```
 
 ```json
-
+{
+  "content_id": "7e97519c-ace4-4ea4-b30a-9b590fd99630",
+  "message": "Your appeal has been recorded and this item is now under review.",
+  "status": "under_review"
+}
 ```
 
 **What the log shows afterwards**
@@ -231,8 +249,47 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
 ```
 
 ```json
-
+{
+  "count": 3,
+  "entries": [
+    {
+      "combined_score": 0.3629,
+      "content_id": "97123f46-9a71-429c-8dd6-89ca22def5bf",
+      "creator_id": "test_human2",
+      "guess": "human",
+      "label": "We think this was most likely written by a person.",
+      "model_score": 0.386,
+      "status": "decided",
+      "style_score": 0.3397,
+      "timestamp": "2026-11-04T04:48:26+00:00"
+    },
+    {
+      "combined_score": 0.741,
+      "content_id": "7e97519c-ace4-4ea4-b30a-9b590fd99630",
+      "creator_id": "test_ai",
+      "guess": "ai",
+      "label": "We think this was most likely written by an AI system, not a person. If you wrote this yourself, you can appeal this decision and tell us why below.",
+      "model_score": 0.8577,
+      "status": "decided",
+      "style_score": 0.6244,
+      "timestamp": "2026-11-04T04:47:13+00:00"
+    },
+    {
+      "content_id": "7e97519c-ace4-4ea4-b30a-9b590fd99630",
+      "creator_id": "test_ai",
+      "event": "appeal",
+      "reasoning": "I wrote this myself as a formal essay for class. English is my second language, so I write carefully and plainly on purpose.",
+      "status": "under_review",
+      "timestamp": "2026-11-04T04:48:33+00:00"
+    }
+  ]
+}
 ```
+
+Note the original `decided` entry for `7e97519c-...` stays untouched, and the
+appeal sits after it with the new `under_review` status — the log is
+append-only, so both the original decision and the challenge to it are
+visible in order.
 
 ---
 

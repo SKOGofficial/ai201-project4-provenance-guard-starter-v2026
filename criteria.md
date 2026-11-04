@@ -42,62 +42,66 @@ Two things worth knowing before you pick numbers:
   a **miss**.
 
 ---
-## 1.
+## 1. False positives
 
-<!-- Your criterion. It must name a number. -->
+Of 10 pieces of text I know are human-written (my own original writing,
+varied length and style), at most 1 is labeled high-confidence AI — and this
+holds in every one of 3 separate trial runs, not just on average.
 
-
-
-**Why this target:**
-
-
-
----
-
-## 2.
-
-<!-- Your criterion. -->
-
-
-
-**Why this target:**
-
-
+**Why this target:** Wrongly accusing a real writer is the expensive mistake
+on a writing site, so it gets the tightest ceiling I can hold myself to. 10%
+means at most 1 in 10 honest submissions risks a false accusation.
 
 ---
 
-## 3.
+## 2. False negatives
 
-<!-- Your criterion. -->
+Of 10 AI-generated texts I submit (from an LLM, varied prompts and lengths),
+at most 2 are labeled high-confidence human — missed detections — in every
+one of 3 trial runs.
 
-
-
-**Why this target:**
-
-
-
----
-
-## 4.
-
-<!-- Your criterion. -->
-
-
-
-**Why this target:**
-
-
+**Why this target:** Missing some AI-generated text costs the site less than
+falsely accusing a human, so this ceiling is deliberately looser than the
+false-positive one. The asymmetry is the point, not an oversight.
 
 ---
 
-## 5.
+## 3. Label coverage
 
-<!-- Your criterion. -->
+Each of the three labels (high-confidence human, unsure, high-confidence AI)
+is actually produced at least once, demonstrated by three deliberate
+submissions: one clearly AI-generated, one clearly human-written, and one
+borderline/mixed.
 
+**Why this target:** A label nobody can reach is a sentence that exists in
+the code but never reaches a reader. The brief requires all three be
+reachable, and the only way to know is to produce each one on purpose.
 
+---
 
-**Why this target:**
+## 4. The appeal path
 
+Every `POST /appeal` call made with a `content_id` that exists in the log
+changes that item's status to `under_review` and shows the new status in
+`GET /log` immediately afterward — checked across 5 separate appeals, 5 of 5
+succeed.
+
+**Why this target:** The appeal is the only correction a wrongly-flagged
+writer has. If it silently fails even once, that person has no recourse at
+all, which is worse than the wrong label by itself.
+
+---
+
+## 5. Bad input
+
+Each malformed submission type — missing `text`, empty `text`, non-string
+`text`, and `text` over 20,000 characters — returns a 400 with a clear error
+message on every attempt (2 tries per case, 8/8 total), never a 500 crash,
+and is never written to the audit log as a decided item.
+
+**Why this target:** A crash on malformed input is one of the most common
+real failures a service has, and a system that can be knocked over by a bad
+request isn't ready to sit in front of real writers.
 
 
 ---

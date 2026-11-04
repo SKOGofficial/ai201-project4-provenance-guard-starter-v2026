@@ -103,6 +103,13 @@ RATE_LIMIT_PER_DAY = 200
 RATE_LIMIT_STORAGE = "memory://"
 
 
+# ─── Input limits ────────────────────────────────────────────────────────────
+# `criteria.md` #5 checks text over this length gets rejected with a 400
+# rather than crashing or stalling the detector on a huge perplexity run.
+
+MAX_TEXT_CHARS = 20_000
+
+
 # ─── Paths ───────────────────────────────────────────────────────────────────
 
 LOG_DIR = ROOT / "logs"

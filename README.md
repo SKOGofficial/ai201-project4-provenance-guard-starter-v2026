@@ -297,15 +297,37 @@ visible in order.
 
 **Moment 1**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* Build the three stylometry measures and the
+  `style_signal` combiner, then test it on four calibration inputs (clearly
+  AI, clearly human, plain human, lightly-edited AI).
+- *What came back:* The first pass used short, 1–3 sentence test snippets.
+  The results were backwards — the "clearly human" sample scored 0.6852
+  (more AI-like) and the "clearly AI" sample scored only 0.644. The signal
+  wasn't discriminating at all.
+- *What I changed:* Instead of accepting the numbers, I had it diagnose why
+  before touching any code: short texts collapse `sentence_length_spread` to
+  0.0 (fewer than two sentences means no spread to measure) and all land
+  near-identical, artificially high `type_token_ratio` regardless of
+  authorship. I had it rebuild the calibration inputs as longer, more
+  realistic passages, which fixed the ordering and also produced a real,
+  documented finding — short submissions are a blind spot for this signal —
+  that's now written into the Signals and Scoring section rather than hidden.
 
 **Moment 2**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* I gave two starting numbers for the acceptance
+  criteria — false positives at most 20%, false negatives at most 20% — and
+  asked for help drafting the remaining three criteria.
+- *What came back:* It flagged that the brief explicitly warns against
+  treating both error types as equally costly ("a criterion that treats both
+  errors as equally bad is describing a system nobody would ship") and
+  recommended tightening the false-positive target to 10% while leaving
+  false negatives at 20%, citing the brief's own worked example.
+- *What I changed:* I adopted the asymmetric numbers (FP ≤ 10%, FN ≤ 20%)
+  instead of my original symmetric draft. I didn't take the suggestion on
+  faith — I checked it against the brief's own stated reasoning (false
+  accusations cost a real writer more than a missed detection costs the
+  site) before agreeing it was the better target.
 
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 

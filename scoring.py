@@ -52,10 +52,26 @@ def combine_signals(model_score: float, style_score: float) -> float:
     The weights in config.py are placeholders. Change them, or ignore them and
     write a different rule.
     """
-    # TODO: replace this
-    return (
+    diff = abs(model_score - style_score)
+
+    if diff > config.DISAGREEMENT_THRESHOLD:
+        # The signals disagree meaningfully. Rather than average straight
+        # through the disagreement, lean toward whichever one is reading more
+        # human — a missed detection costs the site less than a false
+        # accusation costs the writer, so when the two methods can't agree,
+        # the benefit of the doubt goes to the writer.
+        lower = min(model_score, style_score)
+        higher = max(model_score, style_score)
+        return round(
+            config.DISAGREEMENT_LOWER_WEIGHT * lower
+            + (1 - config.DISAGREEMENT_LOWER_WEIGHT) * higher,
+            4,
+        )
+
+    return round(
         config.WEIGHT_MODEL_SIGNAL * model_score
-        + config.WEIGHT_STYLE_SIGNAL * style_score
+        + config.WEIGHT_STYLE_SIGNAL * style_score,
+        4,
     )
 
 

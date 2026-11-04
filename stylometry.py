@@ -64,8 +64,15 @@ def sentence_length_spread(text: str) -> float:
     `stdev` raises on fewer than two values. Decide what that should return
     before the attack set decides for you.
     """
-    # TODO: replace this
-    return 0.0
+    lengths = [len(words(s)) for s in sentences(text) if words(s)]
+    if len(lengths) < 2:
+        return 0.0
+
+    mean = statistics.mean(lengths)
+    if mean == 0:
+        return 0.0
+
+    return statistics.stdev(lengths) / mean
 
 
 def type_token_ratio(text: str) -> float:
@@ -80,8 +87,11 @@ def type_token_ratio(text: str) -> float:
     directly comparable on it, and if your test inputs vary a lot in length,
     that alone can look like a signal.
     """
-    # TODO: replace this
-    return 0.0
+    w = words(text)
+    if not w:
+        return 0.0
+
+    return len(set(w)) / len(w)
 
 
 def punctuation_density(text: str) -> float:
@@ -94,8 +104,15 @@ def punctuation_density(text: str) -> float:
         more interesting than full stops, because they vary more between
         writers.
     """
-    # TODO: replace this
-    return 0.0
+    w = words(text)
+    if not w:
+        return 0.0
+
+    # Semicolons, dashes, and colons vary by a writer's habit rather than by
+    # grammar rules everyone follows the same way. Commas and periods are
+    # nearly universal and don't discriminate much between writers.
+    interesting = re.findall(r"[;:—–]|--", text)
+    return len(interesting) / len(w)
 
 
 # ── Combining them ───────────────────────────────────────────────────────────
@@ -122,8 +139,22 @@ def style_signal(text: str) -> float:
     you trust it. Plain and ordinary, not formal: formal prose reads as *human*
     to signal one, and it is plain writing that gets accused.
     """
-    # TODO: replace this
-    return 0.5
+    spread = sentence_length_spread(text)
+    ttr = type_token_ratio(text)
+    punct = punctuation_density(text)
+
+    # All three raw measures point toward "more human" when higher — spread
+    # and punctuation density aren't naturally 0-1, so each is scaled against
+    # a cap chosen from eyeballing the four calibration inputs, then clipped.
+    # type_token_ratio is already 0-1 and needs no scaling.
+    norm_spread = min(spread / 0.8, 1.0)
+    norm_ttr = ttr
+    norm_punct = min(punct / 0.15, 1.0)
+
+    humanness = (norm_spread + norm_ttr + norm_punct) / 3.0
+
+    # Flip to match model_signal's direction: higher = more likely AI.
+    return round(1.0 - humanness, 4)
 
 
 if __name__ == "__main__":

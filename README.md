@@ -125,8 +125,19 @@ makes it a blind spot rather than a corner case.
      signals disagree? -->
 
 **The rule:**
+When the two signals are within 0.25 of each other, combine them as a plain
+50/50 weighted average. When they disagree by more than 0.25, don't average
+straight through the disagreement — instead weight the lower (more
+human-reading) score at 0.65 and the higher (more AI-reading) score at 0.35.
+A missed detection costs the site less than a false accusation costs the
+writer, so when the two methods can't agree, the benefit of the doubt goes to
+the writer.
 
 **The numbers:**
+- `WEIGHT_MODEL_SIGNAL = 0.5`, `WEIGHT_STYLE_SIGNAL = 0.5` (agreement case)
+- `DISAGREEMENT_THRESHOLD = 0.25` (how far apart counts as a real split)
+- `DISAGREEMENT_LOWER_WEIGHT = 0.65` (weight on the more-human-reading score
+  when they split)
 
 **Where it lives:** `scoring.py::combine_signals`
 
@@ -134,8 +145,26 @@ makes it a blind spot rather than a corner case.
      somewhere else, say where. -->
 
 **A case where my two signals split, and what my rule does with it:**
+A plain, ordinary piece of human writing (a short diary-style paragraph about
+a grocery trip) scored `model_score = 0.69` — signal one read its short,
+common-word sentences as AI-predictable — but `style_score = 0.40`, because
+its sentence lengths actually vary and it carries a semicolon and a dash,
+which read as human. That's a 0.29 split, above the 0.25 threshold, so the
+rule leans toward the lower score: `0.65 × 0.40 + 0.35 × 0.69 = 0.50`. A
+straight 50/50 average would have landed at 0.545 — still "unsure" here, but
+closer to the "ai" threshold (0.65) than the leaned result is, and a more
+AI-ish version of the same plain writing could have crossed it under a plain
+average. This is the exact false-positive scenario from Milestone 1: the
+writer with the least room to argue back is the one this rule is designed to
+protect.
 
-
+I also found the opposite split on an AI-generated paragraph with typos added
+to it as a cheap evasion attempt: `model_score` dropped to 0.33 (the typos
+made the text look "surprising" to signal one) while `style_score` stayed at
+0.58 (the sentence shapes were still AI-regular). That's a 0.24 split — just
+under the disagreement threshold — so it combines as a plain average (0.45,
+"unsure"). It isn't caught as AI, but it also isn't mislabeled as confidently
+human; it lands in the band built for exactly this kind of uncertainty.
 
 ---
 

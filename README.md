@@ -39,7 +39,30 @@
 <!-- The path a submission takes, from arriving to the label a reader sees.
      Six or seven steps — this is the trace you wrote in Milestone 1. -->
 
+1. A writer's text and `creator_id` arrive as JSON at `POST /submit`.
+2. The route validates the input — `text` must be a non-empty string under a
+   size limit — and generates a fresh `content_id` (a UUID) for this piece of
+   writing.
+3. **Signal one** (`detector.model_signal`, in `detector.py`) runs a local
+   language model over the text and returns a 0–1 score: how predictable the
+   text is, where higher means more likely AI.
+4. **Signal two** (`stylometry.style_signal`, in `stylometry.py`) measures the
+   text's shape — sentence-length variation, vocabulary variety, punctuation
+   density — and returns its own 0–1 score, same direction.
+5. `scoring.combine_signals` merges the two 0–1 scores into one combined
+   score.
+6. `scoring.score_to_label` maps that combined score to a short `guess`
+   (`ai` / `human` / `unsure`) and the full-sentence label text a reader
+   actually sees, using the thresholds in `config.py`.
+7. `audit.log_decision` writes one entry — timestamp, `content_id`,
+   `creator_id`, guess, both signal scores, the combined score, the label, and
+   status `decided` — to `logs/audit.jsonl`. The route then returns the
+   `content_id`, guess, confidence, label, and both signal scores to the
+   caller.
 
+If a writer disputes the result, `POST /appeal` takes their `content_id` and
+their reasoning, moves that item's status to `under_review`, and records the
+appeal in the same log, next to the original decision.
 
 ---
 
@@ -54,18 +77,47 @@
 ### Signal one — the model signal
 
 **What it measures:**
+How surprised a local language model (gpt2) is by the text — its perplexity,
+squashed onto a 0–1 scale. Low surprise (the model could have guessed the next
+word) scores close to 1.0 (AI-like); high surprise scores close to 0.0
+(human-like).
 
 **Why that might differ between human and AI writing:**
+A language model writes by repeatedly picking a likely next token, so text a
+model produced tends to be text a model finds easy to predict. Human writing
+wanders — odd word choices, abrupt turns, specific rather than typical phrasing
+— which this model finds harder to predict.
 
 **What it can't see:**
+Predictability is not the same thing as authorship. This signal rewards common
+words in short, ordinary sentences, whoever wrote them — so a non-native
+English speaker sticking to vocabulary they're sure of, a younger writer, or
+anyone writing plainly on purpose can score as machine-like as AI text does.
+The reverse is also true: dense, ornate prose full of rare words often reads as
+*human* here even when it's AI-generated, because rare words are exactly what
+this model fails to predict. The writers it's most likely to accuse are the
+ones with the least room to argue back — that's structural, not a bug.
 
 ### Signal two — the style signal
 
 **What it measures:**
+The text's shape, without reading a word of it: how much sentence length
+varies, how much of the vocabulary repeats (unique words / total words), and
+how dense the punctuation is. The three combine into one 0–1 score, same
+direction as signal one.
 
 **Why that might differ between human and AI writing:**
+Generated prose tends toward even, mid-length sentences and a narrower band of
+vocabulary, because that's what "most likely next word" produces on average.
+Human writing is lumpier — a three-word sentence next to a forty-word one, more
+varied word choice, more idiosyncratic punctuation.
 
 **What it can't see:**
+This signal cannot read. It has no idea what the text says or means. Anything
+that changes the shape of the text without changing its substance moves the
+score — adding typos, breaking a long sentence into short ones, pasting in a
+quoted block. That's a very cheap thing to do on purpose, which is exactly what
+makes it a blind spot rather than a corner case.
 
 ### The combining rule
 

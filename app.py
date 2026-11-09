@@ -65,6 +65,22 @@ class _LimiterOff:
         return lambda view: view
 
 
+def _caller_info() -> dict:
+    """
+    What we actually know about who sent this request, for a rejection entry.
+
+    There's no auth or session system here, so `ip` and `verb` are always
+    present, but `device_id` depends on the caller sending an X-Device-Id
+    header — nothing in this project sends one yet, so expect null there
+    until a client starts.
+    """
+    return {
+        "ip": request.remote_addr,
+        "device_id": request.headers.get("X-Device-Id"),
+        "verb": request.method,
+    }
+
+
 limiter = _LimiterOff()
 if config.RATE_LIMITING_ENABLED:
     from flask_limiter import Limiter
@@ -110,6 +126,7 @@ if config.RATE_LIMITING_ENABLED:
             creator_id=payload.get("creator_id", "unknown"),
             reason="rate_limited",
             limit=str(exc.description),
+            **_caller_info(),
         )
         return jsonify({
             "error": "rate_limited",
@@ -154,7 +171,7 @@ def health():
 # ── YOU BUILD THIS ────────────────────────────────────────────────────────────
 
 @app.post("/submit")
-# @limiter.limit(f"{config.RATE_LIMIT_PER_MINUTE}/minute;{config.RATE_LIMIT_PER_DAY}/day")
+@limiter.limit(f"{config.RATE_LIMIT_PER_MINUTE}/minute;{config.RATE_LIMIT_PER_DAY}/day")
 def submit():
     """
     Take a piece of text, decide about it, log the decision, answer.
@@ -208,20 +225,59 @@ def submit():
 
     text = payload.get("text")
     creator_id = payload.get("creator_id")
+    # creator_id may be invalid (missing/empty/non-string) below, but we still
+    # want *something* to attribute a rejection to in the log where possible.
+    rejection_creator_id = creator_id if isinstance(creator_id, str) and creator_id.strip() else "unknown"
 
-    if not isinstance(text, str) or not text.strip():
+    if "text" not in payload or payload.get("text") is None:
+        audit.log_rejection(
+            creator_id=rejection_creator_id, reason="text_missing", **_caller_info(),
+        )
+        return jsonify({
+            "error": "bad_request",
+            "message": "`text` is required and must be a non-empty string.",
+        }), 400
+
+    if not isinstance(text, str):
+        audit.log_rejection(
+            creator_id=rejection_creator_id,
+            reason="text_not_string",
+            text_type=type(text).__name__,
+            **_caller_info(),
+        )
+        return jsonify({
+            "error": "bad_request",
+            "message": "`text` is required and must be a non-empty string.",
+        }), 400
+
+    if not text.strip():
+        audit.log_rejection(
+            creator_id=rejection_creator_id,
+            reason="text_empty",
+            text_length=len(text),
+            **_caller_info(),
+        )
         return jsonify({
             "error": "bad_request",
             "message": "`text` is required and must be a non-empty string.",
         }), 400
 
     if len(text) > config.MAX_TEXT_CHARS:
+        audit.log_rejection(
+            creator_id=rejection_creator_id,
+            reason="text_too_long",
+            text_chars=len(text),
+            **_caller_info(),
+        )
         return jsonify({
             "error": "bad_request",
             "message": f"`text` is too long — max {config.MAX_TEXT_CHARS} characters.",
         }), 400
 
     if not isinstance(creator_id, str) or not creator_id.strip():
+        audit.log_rejection(
+            creator_id="unknown", reason="creator_id_missing", **_caller_info(),
+        )
         return jsonify({
             "error": "bad_request",
             "message": "`creator_id` is required and must be a non-empty string.",
@@ -232,6 +288,12 @@ def submit():
     try:
         model_score = detector.model_signal(text)
     except (detector.DetectorUnavailable, ValueError) as exc:
+        audit.log_rejection(
+            creator_id=creator_id,
+            reason="detector_error",
+            detail=str(exc),
+            **_caller_info(),
+        )
         return jsonify({
             "error": "bad_request",
             "message": str(exc),
@@ -289,12 +351,21 @@ def appeal():
     reasoning = payload.get("reasoning")
 
     if not isinstance(content_id, str) or not content_id.strip():
+        audit.log_rejection(
+            creator_id="unknown", reason="appeal_content_id_missing", **_caller_info(),
+        )
         return jsonify({
             "error": "bad_request",
             "message": "`content_id` is required and must be a non-empty string.",
         }), 400
 
     if not isinstance(reasoning, str) or not reasoning.strip():
+        audit.log_rejection(
+            creator_id="unknown",
+            reason="appeal_reasoning_missing",
+            content_id=content_id,
+            **_caller_info(),
+        )
         return jsonify({
             "error": "bad_request",
             "message": "`reasoning` is required and must be a non-empty string.",
@@ -302,6 +373,12 @@ def appeal():
 
     existing = audit.entries_for(content_id)
     if not existing:
+        audit.log_rejection(
+            creator_id="unknown",
+            reason="appeal_content_id_not_found",
+            content_id=content_id,
+            **_caller_info(),
+        )
         return jsonify({
             "error": "not_found",
             "message": f"No submission found with content_id '{content_id}'.",

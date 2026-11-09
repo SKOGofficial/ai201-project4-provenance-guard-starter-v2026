@@ -61,10 +61,17 @@ SCENARIOS = [
     {
         "name": "label coverage",
         "criterion": 3,
-        # Known calibration fixtures from Unit 7 (clearly AI, borderline) plus
-        # one of my own pieces (clearly human) — see README for why this one.
+        # Known calibration fixtures (clearly AI, borderline) plus one of my
+        # own pieces (clearly human) — see README for why each one.
+        #
+        # Unit 8, Milestone 5: swapped the "clearly AI" fixture after raising
+        # AI_THRESHOLD to 0.75 — the old one (Unit 7's AI_TEXT, 0.741) fell
+        # just below the new line. This one (from criterion 2's own
+        # AI-generated pool, 0.7625) still clears it. Test-harness fixture
+        # change, not a system change — the one allowed improvement this unit
+        # is the threshold move itself.
         "texts": [
-            "The implementation of the proposed framework requires careful consideration of several key factors. First, it is important to note that the system must be able to handle a wide variety of different inputs. Additionally, the overall performance of the solution depends on a number of important variables. It is also worth noting that proper testing is essential for ensuring reliability. Furthermore, the design should prioritize both scalability and maintainability. Finally, user feedback should be incorporated throughout the development process.",
+            "Recycling plays a critical role in reducing the environmental impact of everyday consumption. By diverting waste from landfills, communities can conserve natural resources and reduce greenhouse gas emissions. It is essential that individuals and organizations alike commit to responsible recycling practices.",
             "the best computer for any individual is the one that meets their spesific demands within a budget limit. Obviosuly there are tradeoffs",
             "I went to the store yesterday. I needed milk, bread, and some eggs, but they were out of the bread I usually get so I grabbed a different kind. The checkout line was long -- maybe fifteen people -- and the guy in front of me paid entirely in coins, which took forever. I didn't mind too much. It was a good trip overall, even with the wait; sometimes that's just how it goes.",
         ],

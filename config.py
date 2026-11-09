@@ -78,7 +78,11 @@ DISAGREEMENT_LOWER_WEIGHT = 0.65
 # that decide who pays for it.
 
 HUMAN_THRESHOLD = 0.40
-AI_THRESHOLD = 0.65
+AI_THRESHOLD = 0.75
+
+# ⚠️ Unit 8, Milestone 5: raised from 0.65 to 0.75 after the attack set broke
+# 6 of 8 false_positive attacks (0.659-0.745) into a wrongful `ai` label.
+# Widens the unsure band on the AI side — see README's "The Improvement".
 
 # ⚠️ One thing that catches people out in Milestone 5. A weighted average can
 # only land between its two inputs — so while `style_signal` is still the stub

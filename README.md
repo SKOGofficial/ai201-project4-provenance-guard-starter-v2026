@@ -470,21 +470,75 @@ told with 71% confidence they didn't write their own work.
 
 ## Run Log and Verdicts
 
-<!-- Your five criteria across three trials. `run_eval.py --label before`. -->
+Produced by `run_eval.py::main` (criteria 1, 2, 3, 5) and by hand with curl
+against `app.py::submit` / `app.py::appeal` (criterion 4 — it needs a real
+`content_id` from a prior submission, which doesn't fit the texts/bodies
+shape `scenarios.py` uses for the rest). Full output in
+`results/run_2026-11-09_0652_before.md` and `results/appeal_test_trials.json`.
 
 | Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
 |---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |
+| 1. False positives | ≤1/10 labeled `ai` | 0/10 | 0/10 | 0/10 |  |
+| 2. False negatives | ≤2/10 labeled `human` | 0/10 | 0/10 | 0/10 |  |
+| 3. Label coverage | 3/3 labels reachable | 3/3 | 3/3 | 3/3 |  |
+| 4. Appeal path | 5/5 succeed | 5/5 | 5/5 | 5/5 |  |
+| 5. Bad input | 4/4 clean 400s | 4/4 | 4/4 | 4/4 |  |
 
-**Real output from one trial**, pasted as text, naming the file and function
-that produced it:
+**Real output from one trial each**, pasted as text, naming the file and
+function that produced it (`scenarios.py` defines the inputs,
+`run_eval.py::main` sends them, `app.py::submit` / `app.py::appeal` answer):
 
 ```json
+// criterion 1 — my own writing, trial 1 (first 2 of 10)
+[
+  {
+    "status": 200, "guess": "human", "confidence": 0.2279,
+    "model_score": 0.1073, "style_score": 0.3485,
+    "label": "We think this was most likely written by a person.",
+    "sent": "the best computer for any individual is the one that meets their spesi"
+  },
+  {
+    "status": 200, "guess": "human", "confidence": 0.2455,
+    "model_score": 0.0187, "style_score": 0.6667,
+    "label": "We think this was most likely written by a person.",
+    "sent": "Sherwin Williams offers great paints for an office building"
+  }
+]
 
+// criterion 2 — AI-generated texts, trial 1 (first 2 of 10)
+[
+  {
+    "status": 200, "guess": "ai", "confidence": 0.7004,
+    "model_score": 0.7554, "style_score": 0.6453,
+    "label": "We think this was most likely written by an AI system, not a person. If you wrote this yourself, you can appeal this decision and tell us why below.",
+    "sent": "Neural networks are computational systems inspired by the structure of"
+  },
+  {
+    "status": 200, "guess": "unsure", "confidence": 0.588,
+    "model_score": 0.657, "style_score": 0.5191,
+    "label": "We can't confidently tell whether this was written by a person or an AI system — our checks didn't clearly point either way. This isn't a judgment against you, and no action is needed on your part.",
+    "sent": "Every challenge is an opportunity in disguise. When we face setbacks, "
+  }
+]
+
+// criterion 3 — label coverage, trial 1 (all 3)
+[
+  {"status": 200, "guess": "ai", "confidence": 0.741, "model_score": 0.8577, "style_score": 0.6244},
+  {"status": 200, "guess": "human", "confidence": 0.2279, "model_score": 0.1073, "style_score": 0.3485},
+  {"status": 200, "guess": "unsure", "confidence": 0.4997, "model_score": 0.6927, "style_score": 0.3958}
+]
+
+// criterion 4 — appeal path, trial 1 (first 2 of 5)
+{"content_id": "0de3674d-79e1-45bb-b822-3b2563c0c3d4", "status_code": 200, "response": {"content_id": "0de3674d-79e1-45bb-b822-3b2563c0c3d4", "message": "Your appeal has been recorded and this item is now under review.", "status": "under_review"}}
+{"content_id": "aca3975d-32ed-4c72-8cef-707b6dc98b86", "status_code": 200, "response": {"content_id": "aca3975d-32ed-4c72-8cef-707b6dc98b86", "message": "Your appeal has been recorded and this item is now under review.", "status": "under_review"}}
+
+// criterion 5 — bad input, trial 1 (all 4)
+[
+  {"status": 400, "guess": null, "sent": "{\"creator_id\": \"eval_bad_missing\"}"},
+  {"status": 400, "guess": null, "sent": "(empty text)"},
+  {"status": 400, "guess": null, "sent": "{\"text\": 42, \"creator_id\": \"eval_bad_number\"}"},
+  {"status": 400, "guess": null, "sent": "word word word word word word word word word word word word word word "}
+]
 ```
 
 **Diagnoses**

@@ -478,11 +478,11 @@ shape `scenarios.py` uses for the rest). Full output in
 
 | Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
 |---|---|---|---|---|---|
-| 1. False positives | ≤1/10 labeled `ai` | 0/10 | 0/10 | 0/10 |  |
-| 2. False negatives | ≤2/10 labeled `human` | 0/10 | 0/10 | 0/10 |  |
-| 3. Label coverage | 3/3 labels reachable | 3/3 | 3/3 | 3/3 |  |
-| 4. Appeal path | 5/5 succeed | 5/5 | 5/5 | 5/5 |  |
-| 5. Bad input | 4/4 clean 400s | 4/4 | 4/4 | 4/4 |  |
+| 1. False positives | ≤1/10 labeled `ai` | 0/10 | 0/10 | 0/10 | MET |
+| 2. False negatives | ≤2/10 labeled `human` | 0/10 | 0/10 | 0/10 | MET |
+| 3. Label coverage | 3/3 labels reachable | 3/3 | 3/3 | 3/3 | MET |
+| 4. Appeal path | 5/5 succeed | 5/5 | 5/5 | 5/5 | MET |
+| 5. Bad input | 4/4 clean 400s | 4/4 | 4/4 | 4/4 | MET |
 
 **Real output from one trial each**, pasted as text, naming the file and
 function that produced it (`scenarios.py` defines the inputs,
@@ -543,20 +543,78 @@ function that produced it (`scenarios.py` defines the inputs,
 
 **Diagnoses**
 
-<!-- For each miss AND each broken attack: the stage and the mechanism.
+**All five of my own criteria held, across all three trials.** But "held"
+here doesn't mean "no false-positive risk" — it means my own test samples
+didn't happen to probe the part of the input space where the system
+actually fails. Criterion 1's target (≤1/10) is about as strict as the
+brief's own worked example, and I'm not loosening it. What I'd revise is the
+**sample composition**: I tested with short, casual, typo-heavy writing —
+exactly the register signal one already handles reasonably (see `EV01`/`EV08`
+below, where perplexity is *too* forgiving of typos, not too harsh). The
+attack set's `false_positive` family broke 6 of 8 on an entirely different
+register — formal, technical, rubric-following, careful non-native English —
+that my own criterion never tested. Passing cleanly told me my casual-writing
+samples are safe; it told me nothing about the register that's actually at
+risk. If I revise anything, it's criterion 1's sample set, not its number —
+and per the rule on revisions, that goes here as an addition, not a
+replacement:
 
-     Your service has five stages: the route, signal one, signal two, the
-     combining rule, and the label mapping.
+> **Revision candidate (not yet made):** Criterion 1 should test with at
+> least 3 of the 10 pieces in a formal/technical register, not only casual
+> writing, because that's the register the attack set proved is actually at
+> risk. The ≤1/10 target stays — only the sample composition would change.
 
-     Not a diagnosis:  "The evasion attacks got through."
-     A diagnosis:      "Four evasion inputs got through. All four had typos
-                        added to AI-generated text. My second signal measures
-                        word variety, and typos raise word variety — so it read
-                        them as more human. My combining rule weights that
-                        signal at 0.6, so it dragged the whole score down."
+**The 14 BROKE attacks from Milestone 2 resolve into three mechanisms, not
+fourteen independent problems.** The service has five stages — the route,
+signal one, signal two, the combining rule, and the label mapping — and
+every one of these 14 traces to signal one and/or the combining rule; none
+trace to the route or the label mapping themselves.
 
-     Look for a pattern. Five failures on one signal is one problem, not five. -->
+**Mechanism A — signal one conflates conventional structure with
+AI-generation (6 attacks: `FP02`, `FP03`, `FP04`, `FP05`, `FP06`, `FP07`).**
+Every one has `model_score` in the 0.74–0.88 range: formal register, a
+non-native speaker writing carefully, a rubric-following student essay,
+technical documentation, a formal template, deliberate repetition. These
+aren't simple short-sentence writing (the blind spot already documented in
+Unit 7) — they're *formulaic*: text that follows a conventional, genre-typical
+structure regardless of vocabulary. gpt2's perplexity measure can't tell
+"predictable because an AI wrote it" from "predictable because this genre has
+a template." `style_score` agrees only moderately (0.54–0.69) in these cases,
+so in 3 of the 6 (`FP04`, `FP06`, `FP07`, each with a model/style gap over
+0.25) `scoring.combine_signals`'s disagreement rule *did* engage and lean
+toward the lower score — but only pulled the combined score to ~0.66, just
+above `AI_THRESHOLD` (0.65). The rule's 65/35 weighting was calibrated against
+Unit 7's split case, where the lower signal read as low as 0.40; it was never
+tested against a case where the "more human" signal itself still reads as
+moderately AI-ish, which is exactly what happens here.
 
+**Mechanism B — signal one is fooled by surface noise and is unreliable on
+short text (2 of 3 broken evasion attacks: `EV01`, `EV08`).** `EV01` (typos
+added to AI text) drops `model_score` to 0.16 — the typos make the text
+"surprising" to gpt2, which reads as human — while `style_score` stays
+ai-ish at 0.64, meaning the attack's own stated target (signal two, word
+variety) barely moved; the system was fooled by a different mechanism than
+the one the attack targeted. `EV08` (text below the token window) scores
+`model_score` 0.25 on very little text — perplexity is inherently noisier
+the less text it has, and nothing in the pipeline discounts a signal's
+reliability based on how little it had to work with. (`EV05`, "heavy human
+editing pass," is not part of this count — both signals genuinely read it as
+human there, which is the system working correctly on a thoroughly-edited
+input, not a bug.)
+
+**Mechanism C — nothing checks that the input is prose at all (5 attacks:
+`MF03`, `MF04`, `MF05`, `MF06`, `MF07`).** Control characters and pure
+punctuation produce extremely *high* perplexity (gpt2 has never seen
+anything like it, finds it maximally surprising) → `model_score` near 0 →
+confidently labeled human. A giant single word, emoji-only text, and
+right-to-left script produce extremely *low* perplexity (degenerate,
+repetitive token patterns become trivially predictable once established) →
+`model_score` near 1 → confidently labeled AI. Both directions share one
+root cause: neither `detector.model_signal` nor `stylometry.style_signal`
+checks whether the input resembles natural-language prose before producing a
+number. Degenerate input doesn't produce "I don't know" — it produces
+whichever extreme that specific kind of degeneracy happens to trigger, and
+the combining rule then reports whatever confidence that extreme implies.
 
 
 ---
